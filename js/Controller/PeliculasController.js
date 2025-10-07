@@ -1,64 +1,46 @@
-// js/controllers/productController.js
+// js/Controller/PeliculasController.js
 
-// --- 1. Importación de servicios para comunicación con la API ---
 import {
   getMovies,
   createMovie,
   updateMovie,
-  deleteProduct,
-} from "../Service.PeliculasService.js";
+  deleteMovie,
+} from "../Service/PeliculasService";
 
-import { getMovies } from "../Service/PeliculasService.js";
+// Variables globales
+let listenersActivos = false;
 
-// Enlaza los eventos de la interfaz una sola vez
-function ActivarListeners() {
+// Evento pageshow para asegurar recarga completa
+window.addEventListener("pageshow", async () => {
+  if (!listenersActivos) activarListeners();
+  await cargarPeliculas();
+});
+
+// Activa listeners solo una vez
+function activarListeners() {
   listenersActivos = true;
 
-  const tableBody = document.querySelector("#itemsTable tbody");
-  const form = document.getElementById("productForm");
-  const modalLabel = document.getElementById("itemModalLabel");
+  const form = document.getElementById("guardarPeliculasBtn").form;
   const btnAdd = document.getElementById("btnAdd");
+  const modal = new bootstrap.Modal(document.getElementById("itemModal"));
 
-
-  // --- 6. Botón "Agregar" ---
   btnAdd?.addEventListener("click", () => {
     limpiarFormulario();
-    modalLabel.textContent = "Agregar Producto";
     modal.show();
   });
 
-  // --- 7. Submit del formulario (crear/actualizar producto) ---
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    let id = form.productId.value;
+    const id = document.getElementById("modalId").value;
 
-    // --- 8. Manejo de imagen ---
-    let finalImageUrl = imageUrlHidden?.value || "";
-    const file = imageFileInput?.files?.[0];
-    if (file) {
-      try {
-        const data = await uploadImageToFolder(file, "products");
-        finalImageUrl = data.url || "";
-      } catch (err) {
-        console.error("Error subiendo imagen:", err);
-        alert("No se pudo subir la imagen. Intenta nuevamente.");
-        return;
-      }
-    }
-
-    // --- 9. Construcción del payload ---
     const payload = {
-      nombre: form.productName.value.trim(),
-      precio: Number(form.productPrice.value),
-      descripcion: form.productDescription.value.trim(),
-      stock: Number(form.productStock.value),
-      fechaIngreso: form.productDate.value,
-      categoriaId: Number(form.productCategory.value),
-      usuarioId: 2,
-      imagen_url: finalImageUrl || null,
+      titulo: document.getElementById("titulo").value.trim(),
+      director: document.getElementById("Director").value.trim(),
+      genero: document.getElementById("Genero").value.trim(),
+      ano_estreno: Number(document.getElementById("ano_estreno").value),
+      duracion_min: Number(document.getElementById("duracion_min").value),
     };
 
-    // --- 10. Crear o actualizar producto ---
     try {
       if (id) {
         await updateMovie(id, payload);
@@ -66,118 +48,114 @@ function ActivarListeners() {
         await createMovie(payload);
       }
       modal.hide();
-      await cargarProductos();
+      await cargarPeliculas();
     } catch (err) {
-      console.error("Error guardando:", err);
-      alert("Ocurrió un error al guardar el producto.");
+      console.error("Error al guardar la película:", err);
+      alert("Ocurrió un error al guardar la película.");
     }
   });
-
-  // Guarda referencias en un objeto asociado a la función
-  ActivarListeners._refs = { tableBody, form, modal, modalLabel, imageFileInput, imageUrlHidden, imagePreview };
 }
 
-// --- 11. Cargar productos con paginación ---
-async function cargarProductos() {
-  const { tableBody } = ActivarListeners._refs || {};
-  if (!tableBody) return; // si aún no hay tabla, no hace nada
+// Carga y renderiza películas en la tabla
+async function cargarPeliculas() {
+  const tableBody = document.querySelector("#itemsTable tbody");
+  if (!tableBody) return;
 
   try {
-    // Solicitud al backend de la página y tamaño actuales
-    const data = await getMovies(currentPage, currentSize);
+    const data = await getMovies();
 
-    // Se asume respuesta paginada: { content, number, totalPages, totalElements }
-    const items = data?.content ?? [];
-    const pageNumber = data?.number ?? currentPage;
-    const totalPages = data?.totalPages ?? 1;
-
-    // Limpieza de tabla y renderizado de la paginación
     tableBody.innerHTML = "";
-    renderPagination(pageNumber, totalPages);
 
-    // --- 12. Renderizado de filas ---
-    items.forEach((item) => {
+    data.forEach((pelicula) => {
       const tr = document.createElement("tr");
 
-      // ID del producto
       const tdId = document.createElement("td");
-      tdId.textContent = item.id;
+      tdId.textContent = pelicula.id ?? "N/A";
       tr.appendChild(tdId);
 
-      // Imagen (si existe se muestra, si no aparece “Sin imagen”)
-      const tdImg = document.createElement("td");
-      if (item.imagen_url) {
-        const img = document.createElement("img");
-        img.className = "thumb";
-        img.alt = "img";
-        img.src = item.imagen_url;
-        tdImg.appendChild(img);
-      } else {
-        const span = document.createElement("span");
-        span.className = "text-muted";
-        span.textContent = "Sin imagen";
-        tdImg.appendChild(span);
-      }
-      tr.appendChild(tdImg);
+      const tdTitulo = document.createElement("td");
+      tdTitulo.textContent = pelicula.titulo ?? "";
+      tr.appendChild(tdTitulo);
 
-      // Nombre del producto (con fallback por compatibilidad)
-      const tdNombre = document.createElement("td");
-      tdNombre.textContent = item.nombre ?? item.nombreProducto ?? "Producto";
-      tr.appendChild(tdNombre);
+      const tdDirector = document.createElement("td");
+      tdDirector.textContent = pelicula.director ?? "";
+      tr.appendChild(tdDirector);
 
-      // Descripción
-      const tdDesc = document.createElement("td");
-      tdDesc.textContent = item.descripcion ?? "";
-      tr.appendChild(tdDesc);
+      const tdGenero = document.createElement("td");
+      tdGenero.textContent = pelicula.genero ?? "";
+      tr.appendChild(tdGenero);
 
-      // Stock disponible
-      const tdStock = document.createElement("td");
-      tdStock.textContent = item.stock ?? 0;
-      tr.appendChild(tdStock);
+      const tdAnio = document.createElement("td");
+      tdAnio.textContent = pelicula.ano_estreno ?? "";
+      tr.appendChild(tdAnio);
 
-      // Fecha de ingreso (compatibilidad con distintos nombres de campo)
+      const tdDuracion = document.createElement("td");
+      tdDuracion.textContent = pelicula.duracion_min + " min" ?? "0 min";
+      tr.appendChild(tdDuracion);
+
       const tdFecha = document.createElement("td");
-      tdFecha.textContent = item.fechaIngreso ?? item.createdAt ?? item.fecha ?? "";
+      tdFecha.textContent = pelicula.fecha_lanzamiento
+        ? new Date(pelicula.fecha_lanzamiento).toLocaleDateString()
+        : "-";
       tr.appendChild(tdFecha);
 
-      // Precio (con formato numérico de 2 decimales)
-      const tdPrecio = document.createElement("td");
-      const precioNum = Number(item.precio ?? item.precioUnitario ?? 0);
-      tdPrecio.textContent = `$${precioNum.toFixed(2)}`;
-      tr.appendChild(tdPrecio);
-
-      // Columna de botones de acción
+      // Botones de acción
       const tdBtns = document.createElement("td");
       tdBtns.className = "text-nowrap";
 
+      const btnEdit = document.createElement("button");
+      btnEdit.className = "btn btn-sm btn-outline-secondary me-1";
+      btnEdit.textContent = "Editar";
+      btnEdit.addEventListener("click", () => setFormulario(pelicula));
+      tdBtns.appendChild(btnEdit);
 
+      const btnDel = document.createElement("button");
+      btnDel.className = "btn btn-sm btn-outline-danger";
+      btnDel.textContent = "Eliminar";
+      btnDel.addEventListener("click", () => {
+        if (confirm("¿Eliminar esta película?")) {
+          eliminarPelicula(pelicula.id);
+        }
+      });
+      tdBtns.appendChild(btnDel);
 
+      tr.appendChild(tdBtns);
 
-
-// --- 14. Rellenar formulario ---
-function setFormulario(item) {
-  // Obtiene referencias a los elementos del formulario y modal desde ActivarListeners
-  const { form, modal, modalLabel, imageUrlHidden, imagePreview, imageFileInput } = ActivarListeners._refs || {};
-  if (!form) return; // si no existe el formulario, termina la ejecución
-
-  // Asigna valores básicos del producto a los campos del formulario
-  form.productId.value = item.id;
-  form.productName.value = item.nombre ?? item.nombreProducto ?? ""; // usa nombre alternativo si existe
-  form.productPrice.value = item.precio ?? item.precioUnitario ?? 0;
-  form.productStock.value = item.stock ?? 0;
-  form.productDescription.value = item.descripcion ?? "";
-  form.productCategory.value = (item.categoriaId ?? item.idCategoria ?? "") || "";
-
-  // Formatea fecha en formato YYYY-MM-DD
-  form.productDate.value = (item.fechaIngreso ?? item.createdAt ?? item.fecha ?? "").toString().slice(0, 10);
-
-  // Manejo de la imagen del producto
-  if (imageUrlHidden) imageUrlHidden.value = item.imagen_url || item.imagenUrl || item.imageUrl || "";
-  if (imagePreview) imagePreview.src = imageUrlHidden?.value || ""; // muestra preview si existe
-  if (imageFileInput) imageFileInput.value = ""; // limpia campo file
-
-  // Actualiza título del modal y lo muestra
-  modalLabel.textContent = "Editar Producto";
-  modal.show(); 
+      tableBody.appendChild(tr);
+    });
+  } catch (err) {
+    console.error("Error cargando películas:", err);
+    tableBody.innerHTML = `<tr><td colspan="8" class="text-danger">No se pudieron cargar las películas.</td></tr>`;
+  }
 }
+
+// Rellena el formulario con los datos de la película
+function setFormulario(pelicula) {
+  document.getElementById("modalId").value = pelicula.id ?? "";
+  document.getElementById("titulo").value = pelicula.titulo ?? "";
+  document.getElementById("Director").value = pelicula.director ?? "";
+  document.getElementById("Genero").value = pelicula.genero ?? "";
+  document.getElementById("ano_estreno").value = pelicula.ano_estreno ?? "";
+  document.getElementById("duracion_min").value = pelicula.duracion_min ?? "";
+}
+
+// Limpia el formulario
+function limpiarFormulario() {
+  document.getElementById("modalId").value = "";
+  document.getElementById("titulo").value = "";
+  document.getElementById("Director").value = "";
+  document.getElementById("Genero").value = "";
+  document.getElementById("ano_estreno").value = "";
+  document.getElementById("duracion_min").value = "";
+}
+
+// Elimina una película por ID
+async function eliminarPelicula(id) {
+  try {
+    await deleteMovie(id);
+    await cargarPeliculas();
+  } catch (err) {
+    console.error("Error eliminando película:", err);
+    alert("No se pudo eliminar la película.");
+  }
 }
